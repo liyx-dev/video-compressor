@@ -55,8 +55,8 @@ app.post("/compress-video", upload.single("video"), async (req, res) => {
 
     const data = await response.json();
 
-    fs.unlinkSync(inputPath);
-    fs.unlinkSync(outputPath);
+    if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
 
     res.json({
       publicUrl: data.publicUrl
