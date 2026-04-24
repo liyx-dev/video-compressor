@@ -3,7 +3,6 @@ const multer = require("multer");
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
 const fs = require("fs");
-const FormData = require("form-data");
 const fetch = require("node-fetch");
 
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -36,7 +35,7 @@ app.post("/compress-video", upload.single("video"), async (req, res) => {
     const buffer = fs.readFileSync(outputPath);
     const base64 = buffer.toString("base64");
 
-    const response = await fetch(
+    const uploadRes = await fetch(
       `${SUPABASE_URL}/functions/v1/generate-r2-upload-url`,
       {
         method: "POST",
@@ -46,31 +45,42 @@ app.post("/compress-video", upload.single("video"), async (req, res) => {
         },
         body: JSON.stringify({
           fileBase64: base64,
-          fileName: req.file.originalname,
+          fileName: req.file.originalname.replace(/\.\w+$/, ".mp4"),
           fileType: "video/mp4",
           folder: "products"
         })
       }
     );
 
-    const data = await response.json();
+    const data = await uploadRes.json();
 
-    if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
-if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+    if (!uploadRes.ok) {
+      throw new Error(data.error || "Upload to R2 failed");
+    }
 
     res.json({
       publicUrl: data.publicUrl
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("VIDEO ERROR:", error);
     res.status(500).json({
       error: error.message
     });
+
+  } finally {
+    if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+    if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
   }
 });
 
-app.listen(10000, () => {
-  console.log("Server running");
+app.get("/", (req, res) => {
+  res.send("Video compressor running");
 });
 
+app.listen(10000, () => {
+  console.log("Server running on port 10000");
+});
+
+
+        
