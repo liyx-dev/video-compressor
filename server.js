@@ -1,4 +1,5 @@
 const express = require("express");
+const cors = require("cors"); // 1. Import CORS
 const multer = require("multer");
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
@@ -8,16 +9,28 @@ const fetch = require("node-fetch");
 ffmpeg.setFfmpegPath(ffmpegPath);
 
 const app = express();
+
+// 2. Enable CORS for all origins
+app.use(cors());
+
+// 3. Increase JSON limit just in case
+app.use(express.json({ limit: '50mb' }));
+
 const upload = multer({ dest: "uploads/" });
 
 const SUPABASE_URL = "https://ugffezktrojjhfbaxrrq.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnZmZlemt0cm9qamhmYmF4cnJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2ODg3NzIsImV4cCI6MjA5MTI2NDc3Mn0.gzFuLSj225QRnxdwyrH25Xpe1YZqPiK7fp_nrsETsW8";
 
 app.post("/compress-video", upload.single("video"), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: "No video file provided" });
+  }
+
   const inputPath = req.file.path;
   const outputPath = `uploads/compressed-${Date.now()}.mp4`;
 
   try {
+    // 4. Perform Compression
     await new Promise((resolve, reject) => {
       ffmpeg(inputPath)
         .outputOptions([
@@ -35,6 +48,7 @@ app.post("/compress-video", upload.single("video"), async (req, res) => {
     const buffer = fs.readFileSync(outputPath);
     const base64 = buffer.toString("base64");
 
+    // 5. Upload to R2 via your Supabase Edge Function
     const uploadRes = await fetch(
       `${SUPABASE_URL}/functions/v1/generate-r2-upload-url`,
       {
@@ -69,18 +83,17 @@ app.post("/compress-video", upload.single("video"), async (req, res) => {
     });
 
   } finally {
+    // Cleanup files
     if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
     if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
   }
 });
 
 app.get("/", (req, res) => {
-  res.send("Video compressor running");
+  res.send("Video compressor running with CORS enabled");
 });
 
-app.listen(10000, () => {
-  console.log("Server running on port 10000");
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
-
-
-        
